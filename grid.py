@@ -1,12 +1,11 @@
-from regex import W
 from max.client import Client
 from os.path import exists
 import ast
-grid_path = 'grid_parameter.txt'
+
 
 class Grid:
-    def __init__(self,key,secret,pair='usdttwd',earn_type='twd') :
-        self.client = Client(key, secret)
+    def __init__(self,key,screct,pair='usdttwd',earn_type='twd'):
+        self.client = Client(key, screct)
         vip_level = self.client.get_private_vip_level()
         self.maker_fee = vip_level['current_vip_level']['maker_fee']
         self.taker_fee = vip_level['current_vip_level']['taker_fee']
@@ -19,10 +18,12 @@ class Grid:
         self.floating_profit = 0
         self.earn_type = earn_type
         self.max_pending_orders = {}
+        self.grid_path = 'grid_parameter.txt'
+        self.grid_exists()
 
     def grid_exists(self):
-        if exists(grid_path):
-            with open(grid_path) as f:
+        if exists(self.grid_path):
+            with open(self.grid_path) as f:
                 self.all_price_list = ast.literal_eval(f.readline())
                 self.init_info =  ast.literal_eval(f.readline())
                 self.new_info =  ast.literal_eval(f.readline())
@@ -43,12 +44,12 @@ class Grid:
         self.client.set_private_cancel_orders(self.pair,'sell')
         self.client.set_private_cancel_orders(self.pair,'buy')
         if sell_all:
-            price = self.get_market_price()
+            newprice = self.get_market_price()
             self.client.set_private_create_order(
                     pair=self.pair,
                     side='sell',
                     amount=round(float(self.new_info['amount']),2),
-                    price=price['buy']
+                    price=newprice['buy']
                 )
 
     def get_market_price(self):
@@ -59,17 +60,17 @@ class Grid:
     def count_grade_profit(self,upper,lower,grid_num):
         self.grade = round((upper - lower) / (grid_num-1),3)
         profit_range = {
-            'min': round((self.grade/upper) - self.maker_fee,4),
-            'max': round((self.grade/lower) - self.maker_fee,4)}
+            'min': round(((self.grade/upper) - self.maker_fee)*100,2),
+            'max': round(((self.grade/lower) - self.maker_fee)*100,2)}
         self.init_info['price'] = float(self.get_market_price()['sell'])
-        self.least = grid_num*9*self.init_info['price'] if self.earn_type=='twd' else grid_num*9*upper
+        self.least = grid_num*9*self.init_info['price'] if self.earn_type=='TWD' else grid_num*9*upper
         self.least = round(self.least*1.003)
         return {'grade':self.grade,'profit':profit_range,'least':self.least}
 
     def create_all_price_list(self,upper,lower,grid_num,order_amount):
         self.init_info['balance'] = order_amount
         if order_amount < self.least:
-            return 'Balance is not enough'
+            return False
         self.init_info['price'] = float(self.get_market_price()['sell'])
         grid_per_amount = self.init_info['balance'] / (grid_num-1)
         self.cancel_all_orders()
@@ -81,7 +82,7 @@ class Grid:
                                       'side':'N',
                                       'orderId':-1}
             
-            placeNum = round(grid_per_amount/self.init_info['price'],2) if self.earn_type == 'twd' else round(grid_per_amount/price,2)
+            placeNum = round(grid_per_amount/self.init_info['price'],2) if self.earn_type == 'TWD' else round(grid_per_amount/price,2)
             self.all_price_list[i]['amount'] = placeNum
 
             if price <= self.init_info['price'] and (self.init_info['price'] - price) > self.grade/2:
@@ -91,10 +92,7 @@ class Grid:
                 self.init_info['amount'] += grid_per_amount/self.init_info['price']
 
         self.init_info['amount']=round(self.init_info['amount'],2)
-        self.new_info['amount'] = self.init_info['amount']
-        self.new_info['balance'] = self.init_info['balance']-(self.init_info['amount']*self.init_info['price'])
-        self._record()
-        return 'Create finshed'
+        return True
 
     def place_order(self):
         try:
@@ -114,6 +112,9 @@ class Grid:
                     price=item['price']
                 )['id']
             self.max_pending_orders = self.all_price_list
+            self.new_info['amount'] = self.init_info['amount']
+            self.new_info['price']=self.init_info['price']
+            self.new_info['balance'] = self.init_info['balance']-(self.init_info['amount']*self.init_info['price'])
             self._record()
             return 'done'
         except Exception as e:
@@ -136,7 +137,7 @@ class Grid:
                     self.max_pending_orders[pre]['side']='buy'
                     self.new_info['amount'] -= item['amount']
                     self.new_info['balance'] += item['amount']*item['price']
-                    if self.earn_type=='twd':
+                    if self.earn_type=='TWD':
                         self.realized_profit += self.grade*item['amount']  
                     else: 
                         self.realized_profit += self.max_pending_orders[i]['amount'] - self.max_pending_orders[pre]['amount']
@@ -151,10 +152,14 @@ class Grid:
         self.all_price_list=self.max_pending_orders
         newPrice = self.get_market_price()
         self.new_info['price']=newPrice['buy']
-        self.floating_profit = (self.new_info['balance']+self.new_info['amount']*self.new_info['price'])-self.init_info['balance']
+        if self.earn_type == 'TWD':
+            self.floating_profit = round((self.realized_profit / self.init_info['balance'])*100,2)
+        else:
+            self.floating_profit = round((self.realized_profit / self.init_info['amount'])*100,2)
+
 
     def _record(self):
-        with open(grid_path,'w') as f:
+        with open(self.grid_path,'w') as f:
             f.write(str(self.all_price_list)+'\n')
             f.write(str(self.init_info)+'\n')
             f.write(str(self.new_info)+'\n')
