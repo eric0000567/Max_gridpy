@@ -1,41 +1,54 @@
-from tenacity import retry, retry_unless_exception_type
+from regex import W
 from max.client import Client
-import sympy as sp
+from os.path import exists
+import ast
+grid_path = 'grid_parameter.txt'
 
 class Grid:
     def __init__(self,key,secret,pair='usdttwd',earn_type='twd') :
         self.client = Client(key, secret)
-        self.vip_level = self.client.get_private_vip_level()
-        self.maker_fee = self.vip_level['current_vip_level']['maker_fee']
-        self.taker_fee = self.vip_level['current_vip_level']['taker_fee']
+        vip_level = self.client.get_private_vip_level()
+        self.maker_fee = vip_level['current_vip_level']['maker_fee']
+        self.taker_fee = vip_level['current_vip_level']['taker_fee']
         self.pair = pair
-        self.all_price_list = []
-        self.buy_dict = {}
-        self.sell_dict = {}
+        self.all_price_list = {}
         self.init_info = {'balance':0,'price':0,'amount':0}
-        self.grid_per_amount = 0
+        self.new_info = {'balance':0,'price':0,'amount':0}
         self.grade = 0
         self.realized_profit = 0
         self.floating_profit = 0
-        self.least_money=0
         self.earn_type = earn_type
         self.max_pending_orders = {}
 
-    def get_base_info(self,Acrypto='USDT',Bcrypto='TWD'):
+    def grid_exists(self):
+        if exists(grid_path):
+            with open(grid_path) as f:
+                self.all_price_list = ast.literal_eval(f.readline())
+                self.init_info =  ast.literal_eval(f.readline())
+                self.new_info =  ast.literal_eval(f.readline())
+                self.grade =  ast.literal_eval(f.readline())
+                self.pair =  ast.literal_eval(f.readline())
+                self.earn_type =  ast.literal_eval(f.readline())
+                self.realized_profit =  ast.literal_eval(f.readline())
+            self.max_pending_orders = self.all_price_list
+
+
+    def get_base_info(self):
         #get available balance
-        ava_balance = {Acrypto:self.client.get_private_account_balance(Acrypto),
-                    Bcrypto:self.client.get_private_account_balance(Bcrypto)}
+        ava_balance = {'USDT':self.client.get_private_account_balance('USDT'),
+                    'TWD':self.client.get_private_account_balance('TWD')}
         return ava_balance
 
-    def cancel_all_orders(self,sell_self=False):
+    def cancel_all_orders(self,sell_all=False):
         self.client.set_private_cancel_orders(self.pair,'sell')
         self.client.set_private_cancel_orders(self.pair,'buy')
-        if not sell_self:
+        if sell_all:
+            price = self.get_market_price()
             self.client.set_private_create_order(
                     pair=self.pair,
                     side='sell',
-                    amount=round(self.get_base_info('USDT')['USDT']['balance'],2),
-                    _type='market'
+                    amount=round(float(self.new_info['amount']),2),
+                    price=price['buy']
                 )
 
     def get_market_price(self):
@@ -45,105 +58,115 @@ class Grid:
 
     def count_grade_profit(self,upper,lower,grid_num):
         self.grade = round((upper - lower) / (grid_num-1),3)
-        self.least_money = grid_num*9
         profit_range = {
             'min': round((self.grade/upper) - self.maker_fee,4),
             'max': round((self.grade/lower) - self.maker_fee,4)}
-        return {'grade':self.grade,'profit':profit_range}
-
-    def create_all_price_list(self,upper,lower,grid_num):
-        self.all_price_list = [round(lower+(self.grade*i),3) for i in range(grid_num)]
-        self.all_price_list[-1] = upper
-        return self.all_price_list
-
-    def create_buysell_list(self):
         self.init_info['price'] = float(self.get_market_price()['sell'])
-        for price in self.all_price_list:
-            self.buy_dict[price] = None
-            self.sell_dict[price] = None
+        self.least = grid_num*9*self.init_info['price'] if self.earn_type=='twd' else grid_num*9*upper
+        self.least = round(self.least*1.003)
+        return {'grade':self.grade,'profit':profit_range,'least':self.least}
+
+    def create_all_price_list(self,upper,lower,grid_num,order_amount):
+        self.init_info['balance'] = order_amount
+        if order_amount < self.least:
+            return 'Balance is not enough'
+        self.init_info['price'] = float(self.get_market_price()['sell'])
+        grid_per_amount = self.init_info['balance'] / (grid_num-1)
+        self.cancel_all_orders()
+
+        for i in range(grid_num):
+            price = round(lower+(self.grade*i),3) if i != (grid_num-1) else upper
+            self.all_price_list[i] = {'price':price,
+                                      'amount':0,
+                                      'side':'N',
+                                      'orderId':-1}
+            
+            placeNum = round(grid_per_amount/self.init_info['price'],2) if self.earn_type == 'twd' else round(grid_per_amount/price,2)
+            self.all_price_list[i]['amount'] = placeNum
 
             if price <= self.init_info['price'] and (self.init_info['price'] - price) > self.grade/2:
-                self.buy_dict[price] = price
+                self.all_price_list[i]['side'] = 'buy'
             if price >= self.init_info['price'] and (price - self.init_info['price']) > self.grade/2:
-                self.sell_dict[price] = price
+                self.all_price_list[i]['side'] = 'sell'
+                self.init_info['amount'] += grid_per_amount/self.init_info['price']
 
-    def create_init_order(self,order_amount):
-        if order_amount < self.least_money:
-            return False
-        self.cancel_all_orders()
-        self.init_info['balance'] = round(order_amount*0.997,2)
-        self.create_buysell_list()
-        self.grid_per_amount = self.init_info['balance'] / len(self.all_price_list)
-        if self.earn_type == 'twd':
-            self.grid_per_amount /= self.init_info['price']
+        self.init_info['amount']=round(self.init_info['amount'],2)
+        self.new_info['amount'] = self.init_info['amount']
+        self.new_info['balance'] = self.init_info['balance']-(self.init_info['amount']*self.init_info['price'])
+        self._record()
+        return 'Create finshed'
 
-        # buy init sell amount
-        buy_amount = 0
-        for i in self.sell_dict:
-            if i is not None:
-                buy_amount+=1
-        self.init_info['amount'] = round(self.grid_per_amount/self.init_info['price'],2)*buy_amount 
-        self.client.set_private_create_order(
+    def place_order(self):
+        try:
+            self.client.set_private_create_order(
                 pair=self.pair,
                 side='buy',
                 amount=self.init_info['amount'],
-                price=price,
-                _type='market'
+                price=self.init_info['price']
             )
-
-        #pending orders
-        for price,order in self.buy_dict.items():
-            if order is not None:
-                self.buy_dict[price] = self.client.set_private_create_order(
+            for i,item in self.all_price_list.items():
+                if item['side'] == 'N':
+                    continue
+                self.all_price_list[i]['orderId'] = self.client.set_private_create_order(
                     pair=self.pair,
-                    side='buy',
-                    amount=round(self.grid_per_amount,2) if self.earn_type == 'twd' else round(self.grid_per_amount/price,2),
-                    price=price,
-                    _type='limit'
-                )
-        for price,order in self.sell_dict.items():
-            if order is not None:
-                self.sell_dict[price] = self.client.set_private_create_order(
-                    pair=self.pair,
-                    side='sell',
-                    amount=round(self.grid_per_amount,2) if self.earn_type == 'twd' else round(self.grid_per_amount/price,2),
-                    price=price,
-                    _type='limit'
-                )
-        return True
+                    side=item['side'],
+                    amount=item['amount'],
+                    price=item['price']
+                )['id']
+            self.max_pending_orders = self.all_price_list
+            self._record()
+            return 'done'
+        except Exception as e:
+            return str(e)
 
     def checking_orders(self):
-        new_price = self.get_market_price()
-        balance = self.get_base_info()
-        self.floating_profit = (balance['USDT']*new_price['buy'] + self.realized_profit) - self.init_info['balance']
-        for price in self.all_price_list:
-            if self.buy_dict[price] is not None:
-                order_state = self.client.get_private_order_detail(self.buy_dict[price]['client_id'])['state']
-                if order_state == 'done':
-                    self.buy_dict[price] = None
-                    p = price+self.grade
-                    self.sell_dict[p] = self.client.set_private_create_order(
-                        pair=self.pair,
-                        side='sell',
-                        amount=round(self.grid_per_amount,2) if self.earn_type == 'twd' else round(self.grid_per_amount/p,2),
-                        price=p,
-                        _type='limit'
-                    )
-            if self.sell_dict[price] is not None:
-                order_state = self.client.get_private_order_detail(self.sell_dict[price]['client_id'])['state']
-                if order_state == 'done':
-                    self.sell_dict[price] = None
-                    self.realized_profit += self.grade
-                    p = price-self.grade
-                    self.buy_dict[p] = self.client.set_private_create_order(
-                        pair=self.pair,
-                        side='buy',
-                        amount=round(self.grid_per_amount,2) if self.earn_type == 'twd' else round(self.grid_per_amount/p,2),
-                        price=p,
-                        _type='limit'
-                    )
-                
-   
+        for i,item in self.all_price_list.items():
+            if item['orderId'] != -1:
+                continue
+            pre = i-1 if i>0 else i
+            nex = i+1 if i<len(self.all_price_list)-1 else i
+            
+            order_info = self.client.get_private_order_detail(item['orderId'])
+            if order_info['state']=='done':
+                if order_info['side']=='buy':
+                    self.max_pending_orders[nex]['side']='sell'
+                    self.new_info['amount'] += item['amount']
+                    self.new_info['balance'] -= item['amount']*item['price']
+                elif order_info['side']=='sell':
+                    self.max_pending_orders[pre]['side']='buy'
+                    self.new_info['amount'] -= item['amount']
+                    self.new_info['balance'] += item['amount']*item['price']
+                    if self.earn_type=='twd':
+                        self.realized_profit += self.grade*item['amount']  
+                    else: 
+                        self.realized_profit += self.max_pending_orders[i]['amount'] - self.max_pending_orders[pre]['amount']
+
+                self.max_pending_orders[nex]['orderId'] = self.client.set_private_create_order(
+                    pair=self.pair,
+                    side=self.max_pending_orders[nex]['side'],
+                    amount=self.max_pending_orders[nex]['amount'],
+                    price=self.max_pending_orders[nex]['price']
+                )['id']
+        
+        self.all_price_list=self.max_pending_orders
+        newPrice = self.get_market_price()
+        self.new_info['price']=newPrice['buy']
+        self.floating_profit = (self.new_info['balance']+self.new_info['amount']*self.new_info['price'])-self.init_info['balance']
+
+    def _record(self):
+        with open(grid_path,'w') as f:
+            f.write(str(self.all_price_list)+'\n')
+            f.write(str(self.init_info)+'\n')
+            f.write(str(self.new_info)+'\n')
+            f.write(str(self.grade)+'\n')
+            f.write(str(self.pair)+'\n')
+            f.write(str(self.earn_type)+'\n')
+            f.write(str(self.realized_profit))
+
+
+
+
+
 
 
 
