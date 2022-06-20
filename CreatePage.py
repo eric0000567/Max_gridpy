@@ -1,11 +1,10 @@
+from GridPage import GridPage
 from tkinter import *
-from venv import create
 from grid import *
 from tkinter.scrolledtext import ScrolledText
 from tkinter.messagebox import *
-import multiprocessing as mp
 
-class MainPage(object): # 狀態總覽
+class CreateGrid(object): # 狀態總覽
     def __init__(self, master=None,key='',screct=''):
         self.root = master
         self.root.geometry('%dx%d' % (800, 600))
@@ -27,7 +26,17 @@ class MainPage(object): # 狀態總覽
         self.page = Frame(self.root) #建立Frame
         self.page.pack()
         Label(self.page).grid(row=0, stick=W)
-        showinfo(title='警告', message='若關閉此程式網格將停止運行！！\n此網格每90秒檢查一次')
+        showinfo(title='警告', message='若關閉此程式網格將停止運行！！\n此程式一次只能執行一個網格！！\n此網格每90秒檢查一次')
+        
+        if self.gd.init_info['balance'] != 0:
+            res = askyesno(title = '詢問',message='您有尚未關閉的網格，是否繼續使用？')
+            if res :
+                self.page.destroy()
+                GridPage(self.root,self.gd)
+            else:
+                self.gd.delete_grid()
+                cancelPre = askyesno(title = '詢問',message='是否賣出上次網格購買的餘額？')
+                self.gd.cancel_all_orders(cancelPre)
 
         Label(self.page, text = '當前資產狀態').grid(row=0, column=0,columnspan=2, stick=EW, pady=10)
         self.balance = Label(self.page, text = '...')
@@ -50,8 +59,6 @@ class MainPage(object): # 狀態總覽
         Entry(self.page, textvariable=self.grid_balance).grid(row=10, column=1, stick=W, pady=5)
 
         Button(self.page, text='創建網格', command=self.create_grid).grid(row=11, column=1, stick=E)
-        Button(self.page, text='查看網格資訊', command=self.now_profit).grid(row=12, column=0, stick=E)
-        Button(self.page, text='查看當前掛單', command=self.grid_list_info).grid(row=12, column=1, stick=W)
 
         self.msg = ''
         self.st = ScrolledText(self.page,height=10)
@@ -61,47 +68,9 @@ class MainPage(object): # 狀態總覽
         initBalance = self.gd.get_base_info()
         self.balance['text'] = 'TWD: {} \n USDT: {}'.format(str(initBalance['TWD']['balance']),str(initBalance['USDT']['balance']))
         
-        self.gd.earn_type = self.earn_type.get()
-        
-        OptionMenu(self.page, self.sellSelf, *self.selloption).grid(row=14, column=1, sticky=EW)
-        Button(self.page, text='關閉網格', command=self.close_grid).grid(row=14, column=1, stick=E)
 
-    def close_grid(self):
-        try:
-            if self.sellSelf.get() == self.selloption[0]:
-                self.gd.cancel_all_orders(False)
-                self.msg = '已關閉網格，請手動賣出USDT'
-            elif self.sellSelf.get() == self.selloption[1]:
-                self.gd.cancel_all_orders(True)
-                self.msg = '已關閉網格，已自動賣出USDT'
-            self.printInfo()
-        except Exception as e:
-            self.msg+= 'Error:'+str(e)+'\n(API請求失敗，請確認下單參數及餘額)'
-
-    def now_profit(self):
-        self.msg += '初始總額：{} TWD,  初始價格：{}\n當前總額：{} TWD,  當前價格：{}\n已實現利潤：{} {}\n預估年化報酬率：{}% \n\n'.format(
-            self.gd.init_info['balance'],
-            self.gd.init_info['price'],
-            self.gd.new_info['balance']+(self.gd.new_info['amount']*self.gd.new_info['price']),
-            self.gd.new_info['price'],
-            self.gd.realized_profit,
-            self.gd.earn_type,
-            self.gd.floating_profit)
-        self.printInfo()
-
-    def grid_list_info(self):
-        self.msg+='[價格   ,方向  ,數量  ]\n'
-        issell = True
-        for i,item in self.gd.all_price_list.items():
-            if item['side'] == 'sell' and issell:
-                self.msg+='\n'
-                issell=False
-            if item['side'] !='N':
-                self.msg+= str([item['price'],item['side'],item['amount']])+'\n'
-        self.printInfo()
-        
-        
     def count_grade_profit(self):
+        self.gd.earn_type = self.earn_type.get()
         self.nowPrice['text'] = '當前USDT價格：{}'.format(str(self.gd.get_market_price()['sell']))
         data = self.gd.count_grade_profit(
             float(self.upper.get()),
@@ -129,20 +98,12 @@ class MainPage(object): # 狀態總覽
         if placeMsg =='done':
             self.msg+= '網格創建完成!\n'
             self.printInfo()
-            self.checkOrder()
+            self.page.destroy()
+            GridPage(self.root,self.gd)
         else:
-            self.msg+= 'Error:'+placeMsg+'\n(API請求失敗，請確認下單參數及餘額)'
+            self.msg+= placeMsg+'\n(API請求失敗，請確認下單參數及餘額)'
         self.printInfo()
 
-
-    def checkOrder(self):
-        self.nowPrice['text'] = '當前USDT價格：{}'.format(str(self.gd.get_market_price()['sell']))
-        initBalance = self.gd.get_base_info()
-        self.balance['text'] = 'TWD: {} \n USDT: {}'.format(str(initBalance['TWD']['balance']),str(initBalance['USDT']['balance']))
-        self.gd._record()
-        self.msg = '\n網格進行中..\n\n'
-        self.now_profit()
-        self.page.after(90000,self.checkOrder)
 
     def printInfo(self):
         self.st['state'] = 'normal'	

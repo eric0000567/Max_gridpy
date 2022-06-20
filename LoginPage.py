@@ -1,7 +1,5 @@
-from tkinter import *
-from tkinter.messagebox import *
 import webbrowser
-from MainPage import *
+from CreatePage import *
 import requests
 
 dataURL = 'https://script.google.com/macros/s/AKfycbwBCAOlZvtzGFG8ZVeA0qHGxaqO1dXCSo-A0V_t_UVAE1pVbEO_LZEL-Rx4wwTTpYi2/exec'
@@ -21,6 +19,7 @@ class LoginPage(object):
         self.page = Frame(self.root) #建立Frame
         self.page.pack()
         Label(self.page).grid(row=0, stick=W)
+
         Label(self.page, text = '電話號碼: ').grid(row=1, stick=W, pady=10)
         Entry(self.page, textvariable=self.phone).grid(row=1, column=1, stick=E)
         Label(self.page, text = 'MAX API Key: ').grid(row=2, stick=W, pady=10)
@@ -39,6 +38,9 @@ class LoginPage(object):
         webbrowser.open_new(url)
 
     def loginCheck(self):
+        self.page.destroy()
+        CreateGrid(self.root,'JowUYDqT6GplbBt0CAgsIUx0ZNskN899EXnmxTYe','jve7dZ2CEElLAGxNAXeLx5RANwaon9FdpFn4239a')
+        return
         phone = self.phone.get()
         key = self.key.get()
         screct = self.screct.get()
@@ -50,7 +52,7 @@ class LoginPage(object):
         if checkAcc:
             try:
                 self.page.destroy()
-                MainPage(self.root,key,screct)
+                CreateGrid(self.root,key,screct)
             except Exception as e:   
                 showinfo(title='錯誤', message='API KEY錯誤！請再次檢查是否輸入正確或是否開通此API！')
         else:

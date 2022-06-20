@@ -1,17 +1,19 @@
 from max.client import Client
-from os.path import exists
+import os
 import ast
 
 
 class Grid:
     def __init__(self,key,screct,pair='usdttwd',earn_type='twd'):
+        self.key = key
+        self.screct = screct
         self.client = Client(key, screct)
         vip_level = self.client.get_private_vip_level()
         self.maker_fee = vip_level['current_vip_level']['maker_fee']
         self.taker_fee = vip_level['current_vip_level']['taker_fee']
         self.pair = pair
         self.all_price_list = {}
-        self.init_info = {'balance':0,'price':0,'amount':0}
+        self.init_info = {'balance':0,'price':0,'amount':0,'upper':0,'lower':0,'grid_num':0}
         self.new_info = {'balance':0,'price':0,'amount':0}
         self.grade = 0
         self.realized_profit = 0
@@ -20,17 +22,20 @@ class Grid:
         self.max_pending_orders = {}
         self.grid_path = 'grid_parameter.txt'
         self.grid_exists()
+    def delete_grid(self):
+        if os.path.exists(self.grid_path):
+            os.remove(self.grid_path)
 
     def grid_exists(self):
-        if exists(self.grid_path):
+        if os.path.exists(self.grid_path):
             with open(self.grid_path) as f:
                 self.all_price_list = ast.literal_eval(f.readline())
                 self.init_info =  ast.literal_eval(f.readline())
                 self.new_info =  ast.literal_eval(f.readline())
-                self.grade =  ast.literal_eval(f.readline())
+                self.grade =  float(ast.literal_eval(f.readline()))
                 self.pair =  ast.literal_eval(f.readline())
                 self.earn_type =  ast.literal_eval(f.readline())
-                self.realized_profit =  ast.literal_eval(f.readline())
+                self.realized_profit =  float(ast.literal_eval(f.readline()))
             self.max_pending_orders = self.all_price_list
 
 
@@ -68,6 +73,9 @@ class Grid:
         return {'grade':self.grade,'profit':profit_range,'least':self.least}
 
     def create_all_price_list(self,upper,lower,grid_num,order_amount):
+        self.init_info['upper'] = upper
+        self.init_info['lower'] = lower
+        self.init_info['grid_num'] = grid_num
         self.init_info['balance'] = order_amount
         if order_amount < self.least:
             return False
@@ -148,7 +156,7 @@ class Grid:
                     amount=self.max_pending_orders[nex]['amount'],
                     price=self.max_pending_orders[nex]['price']
                 )['id']
-        
+        self._record()
         self.all_price_list=self.max_pending_orders
         newPrice = self.get_market_price()
         self.new_info['price']=newPrice['buy']
@@ -164,8 +172,8 @@ class Grid:
             f.write(str(self.init_info)+'\n')
             f.write(str(self.new_info)+'\n')
             f.write(str(self.grade)+'\n')
-            f.write(str(self.pair)+'\n')
-            f.write(str(self.earn_type)+'\n')
+            f.write('"'+str(self.pair)+'"\n')
+            f.write('"'+str(self.earn_type)+'"\n')
             f.write(str(self.realized_profit))
 
 
