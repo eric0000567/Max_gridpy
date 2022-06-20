@@ -38,9 +38,6 @@ class LoginPage(object):
         webbrowser.open_new(url)
 
     def loginCheck(self):
-        self.page.destroy()
-        CreateGrid(self.root,'JowUYDqT6GplbBt0CAgsIUx0ZNskN899EXnmxTYe','jve7dZ2CEElLAGxNAXeLx5RANwaon9FdpFn4239a')
-        return
         phone = self.phone.get()
         key = self.key.get()
         screct = self.screct.get()
