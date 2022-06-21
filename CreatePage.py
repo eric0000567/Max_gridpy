@@ -82,18 +82,19 @@ class CreateGrid(object): # 狀態總覽
         self.printInfo()
 
     def create_grid(self):
-        self.count_grade_profit()
         self.msg += '創建中..請稍後..'
-        self.printInfo()
+        self.count_grade_profit()
         creating = self.gd.create_all_price_list(
             float(self.upper.get()),
             float(self.lower.get()),
             int(self.gradeNum.get()),
             float(self.grid_balance.get()))
+        
         if not creating:
             self.msg += '餘額不足！'
             self.printInfo()
             return
+        
         placeMsg = self.gd.place_order()
         if placeMsg =='done':
             self.msg+= '網格創建完成!\n'

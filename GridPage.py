@@ -56,7 +56,7 @@ class GridPage(object): # 狀態總覽
         self.gd.new_info['price']=float(nowPrice['buy'])
         self.gd.new_info['balance'] = float(self.gd.new_info['balance'])+(float(self.gd.new_info['amount'])*float(self.gd.new_info['price']))
             
-        self.msg += '網格上限：{} 網格下限：{} 網格數量：{}\n初始總額：{} TWD,  初始價格：{}\n當前總額：{} TWD,  當前價格：{}\n已實現利潤：{} {}\n預估年化報酬率：{}% \n\n'.format(
+        self.msg += '網格上限：{} 網格下限：{} 網格數量：{}\n初始總額：{} TWD,  初始價格：{}\n當前總額：{} TWD,  當前買方價格：{}\n已實現利潤：{} {}\n預估年化報酬率：{}% \n\n'.format(
             self.gd.init_info['upper'],
             self.gd.init_info['lower'],
             self.gd.init_info['grid_num'],
@@ -85,7 +85,7 @@ class GridPage(object): # 狀態總覽
         self.balance['text'] = 'TWD: {} \n USDT: {}'.format(str(initBalance['TWD']['balance']),str(initBalance['USDT']['balance']))
         self.msg = '\n網格進行中..\n\n'
         self.now_profit()
-        self.page.after(90000,self.checkOrder)
+        self.page.after(2000,self.checkOrder)
 
     def printInfo(self):
         self.st['state'] = 'normal'	

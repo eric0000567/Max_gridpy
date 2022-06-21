@@ -1,7 +1,6 @@
 from time import time
 from LoginPage import *
 from tkinter import *
-import multiprocessing as mp
 '''
 0.get user balance
 1.setting grid parameter
@@ -18,7 +17,7 @@ LoginPage(root)
 # root.mainloop()
 # with mp.Pool(4) as p:
     # result1 = p.map(root.mainloop(), chunksize=100000)
-mp.Process(target=root.mainloop()).start()
+target=root.mainloop()
 
 
 
