@@ -16,7 +16,8 @@ class CreateGrid(object): # 狀態總覽
         self.optionList = ["TWD", "USDT"]
         self.earn_type.set(self.optionList[0])
         self.grid_balance = StringVar()
-
+        self.usdtUsed = BooleanVar()
+        self.usdtUsed.set(False)
         self.sellSelf = StringVar()
         self.selloption = ["不做任何動作", "賣出所有網格持倉"]
         self.sellSelf.set(self.selloption[0])
@@ -54,7 +55,9 @@ class CreateGrid(object): # 狀態總覽
         Entry(self.page, textvariable=self.lower).grid(row=5, column=1, stick=W, pady=5)
         Label(self.page, text = '網格數量：').grid(row=6, column=0, stick=W, pady=5)
         Entry(self.page, textvariable=self.gradeNum).grid(row=6, column=1, stick=W, pady=5)
-        Button(self.page, text='計算報酬', command=self.count_grade_profit).grid(row=7, column=1, stick=E)
+        Checkbutton(self.page, text='使用原有USDT', var=self.usdtUsed).grid(row=7, column=1, stick=W)
+        Button(self.page, text='計算報酬', command=self.count_grade_profit).grid(row=8, column=1, stick=E)
+        
         Label(self.page, text = '開單金額：').grid(row=10, column=0, stick=W, pady=5)
         Entry(self.page, textvariable=self.grid_balance).grid(row=10, column=1, stick=W, pady=5)
 
@@ -71,6 +74,7 @@ class CreateGrid(object): # 狀態總覽
 
     def count_grade_profit(self):
         self.gd.earn_type = self.earn_type.get()
+        self.gd.usdtUsed = self.usdtUsed.get()
         self.nowPrice['text'] = '當前USDT價格：{}'.format(str(self.gd.get_market_price()['sell']))
         data = self.gd.count_grade_profit(
             float(self.upper.get()),
@@ -78,11 +82,12 @@ class CreateGrid(object): # 狀態總覽
             int(self.gradeNum.get()))
         self.msg +='價差間隔：{}'.format(str(data['grade']))+'\n'
         self.msg +='報酬率(已扣除手續費)：{}% ~ {}%'.format(str(data['profit']['min']),str(data['profit']['max']))+'\n'
-        self.msg +='最少使用：{} 台幣'.format(str(data['least']))+'\n\n'
+        self.msg +='總共需要：{} 台幣，用於購買：{} USDT 及 {} 台幣用於掛單'.format(str(data['least']),str(data['usdtleast']),str(data['twdleast']))+'\n'
+        self.msg +='(些許差異為手續費餘額)\n'
         self.printInfo()
 
     def create_grid(self):
-        self.msg += '創建中..請稍後..'
+        self.msg += '創建中..請稍後..\n\n'
         self.count_grade_profit()
         creating = self.gd.create_all_price_list(
             float(self.upper.get()),
@@ -94,7 +99,6 @@ class CreateGrid(object): # 狀態總覽
             self.msg += '餘額不足！'
             self.printInfo()
             return
-        
         placeMsg = self.gd.place_order()
         if placeMsg =='done':
             self.msg+= '網格創建完成!\n'

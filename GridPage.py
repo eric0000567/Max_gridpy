@@ -85,6 +85,7 @@ class GridPage(object): # 狀態總覽
         self.balance['text'] = 'TWD: {} \n USDT: {}'.format(str(initBalance['TWD']['balance']),str(initBalance['USDT']['balance']))
         self.msg = '\n網格進行中..\n\n'
         self.now_profit()
+        self.gd.checking_orders()
         self.page.after(90000,self.checkOrder)
 
     def printInfo(self):

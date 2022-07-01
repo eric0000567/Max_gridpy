@@ -19,6 +19,7 @@ class Grid:
         self.realized_profit = 0
         self.floating_profit = 0
         self.earn_type = earn_type
+        self.usdtUsed = False
         self.max_pending_orders = {}
         self.grid_path = 'grid_parameter.txt'
         self.grid_exists()
@@ -41,8 +42,8 @@ class Grid:
 
     def get_base_info(self):
         #get available balance
-        ava_balance = {'USDT':self.client.get_private_account_balance('USDT'),
-                    'TWD':self.client.get_private_account_balance('TWD')}
+        ava_balance = {'USDT':self.client.get_private_account_balance('usdt'),
+                    'TWD':self.client.get_private_account_balance('twd')}
         return ava_balance
 
     def cancel_all_orders(self,sell_all=False):
@@ -68,15 +69,29 @@ class Grid:
             'min': round(((self.grade/upper) - 0.0012)*100,2),
             'max': round(((self.grade/lower) - 0.0012)*100,2)}
         self.init_info['price'] = float(self.get_market_price()['sell'])
-        self.least = grid_num*9*self.init_info['price'] if self.earn_type=='TWD' else grid_num*9*upper
+        twdNeed = round(((self.init_info['price']-lower)/self.grade)*9*self.init_info['price'])
+        usdtNeed = float(round((upper-self.init_info['price'])/self.grade)*9)
+  
+        # self.least = twdNeed+(usdtNeed*upper)
+        # self.least = grid_num*9*self.init_info['price'] if self.earn_type=='TWD' else grid_num*9*upper
+        # self.least = round(self.least*(1+(0.0015*grid_num)))
+        if self.usdtUsed :
+            usdtAva = float(self.get_base_info()['USDT']['balance'])
+            usdtNeed = usdtNeed-usdtAva if (usdtNeed-usdtAva)>=0 else 0
+        self.least = twdNeed+(usdtNeed*upper)
         self.least = round(self.least*(1+(0.0015*grid_num)))
-        return {'grade':self.grade,'profit':profit_range,'least':self.least}
+        print(usdtNeed)
+        print(twdNeed)
+        return {'grade':self.grade,'profit':profit_range,'least':self.least,'usdtleast':usdtNeed,'twdleast':twdNeed}
 
     def create_all_price_list(self,upper,lower,grid_num,order_amount):
         self.init_info['upper'] = upper
         self.init_info['lower'] = lower
         self.init_info['grid_num'] = grid_num
         self.init_info['balance'] = order_amount
+        if self.usdtUsed:
+            usdtAva = self.get_base_info()['USDT']['balance']
+            self.init_info['balance'] += round(float(usdtAva)*float(self.init_info['price']))
         if order_amount < self.least:
             return False
         grid_per_amount = self.init_info['balance'] / (grid_num-1)
@@ -97,17 +112,23 @@ class Grid:
                 self.all_price_list[i]['side'] = 'buy'
             if price >= self.init_info['price'] and (price - self.init_info['price']) > self.grade/2:
                 self.all_price_list[i]['side'] = 'sell'
-                self.init_info['amount'] += math.ceil((grid_per_amount/self.init_info['price'])*100.11)/100
+                self.init_info['amount'] += grid_per_amount/self.init_info['price']
 
-        self.init_info['amount']=math.ceil(self.init_info['amount']*100)/100
+        self.init_info['amount']=math.ceil(self.init_info['amount']*100.2)/100
+        print(self.all_price_list)
+        print(self.init_info)
         return True
 
     def place_order(self):
         try:
+            initAmount = self.init_info['amount']
+            if self.usdtUsed:
+                usdtAva = self.get_base_info()['USDT']['balance']
+                initAmount -= float(usdtAva)
             self.client.set_private_create_order(
                 pair=self.pair,
                 side='buy',
-                amount=self.init_info['amount'],
+                amount=initAmount,
                 price=self.init_info['price']
             )
             for i,item in self.all_price_list.items():
@@ -130,7 +151,7 @@ class Grid:
             self.new_info['price']=self.init_info['price']
             self.new_info['balance'] = self.init_info['balance']-(self.init_info['amount']*self.init_info['price'])
             self._record()
-            print(self.all_price_list)
+            print(self.max_pending_orders)
             return 'done'
         except Exception as e:
             print(str(e))
@@ -188,7 +209,7 @@ class Grid:
             f.write(str(self.grade)+'\n')
             f.write('"'+str(self.pair)+'"\n')
             f.write('"'+str(self.earn_type)+'"\n')
-            f.write(str(self.realized_profit))
+            f.write(str(self.realized_profit)+'\n')
 
 
 
