@@ -1,6 +1,4 @@
-from GridPage import GridPage
-from tkinter import *
-from grid import *
+from GridPage import *
 from tkinter.scrolledtext import ScrolledText
 from tkinter.messagebox import *
 
@@ -28,7 +26,6 @@ class CreateGrid(object): # 狀態總覽
         self.page.pack()
         Label(self.page).grid(row=0, stick=W)
         showinfo(title='警告', message='若關閉此程式網格將停止運行！！\n此程式一次只能執行一個網格！！\n此網格每90秒檢查一次')
-        
         if self.gd.init_info['balance'] != 0:
             res = askyesno(title = '詢問',message='您有尚未關閉的網格，是否繼續使用？')
             if res :
@@ -107,7 +104,7 @@ class CreateGrid(object): # 狀態總覽
             GridPage(self.root,self.gd)
         else:
             self.msg+= placeMsg+'\n(API請求失敗，請確認下單參數及餘額)'
-        self.printInfo()
+            self.printInfo()
 
 
     def printInfo(self):

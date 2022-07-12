@@ -1,3 +1,4 @@
+import time
 from tkinter import *
 from grid import *
 from tkinter.scrolledtext import ScrolledText
@@ -47,6 +48,7 @@ class GridPage(object): # 狀態總覽
                     self.msg = '已關閉網格，已自動賣出USDT'
                 self.printInfo()
                 self.gd.delete_grid()
+                time.sleep(5)
                 self.page.quit()
             except Exception as e:
                 self.msg+= 'Error:'+str(e)+'\n(API請求失敗，請確認下單參數及餘額)'
@@ -56,7 +58,7 @@ class GridPage(object): # 狀態總覽
         self.gd.new_info['price']=float(nowPrice['buy'])
         NowBalance = float(self.gd.new_info['balance'])+(float(self.gd.new_info['amount'])*float(self.gd.new_info['price']))
             
-        self.msg += '網格上限：{} 網格下限：{} 網格數量：{}\n初始總額：{} TWD,  初始價格：{}\n當前總額：{} TWD,  當前買方價格：{}\n已實現利潤：{} {}\n預估年化報酬率：{}% \n\n'.format(
+        self.msg += '網格上限：{} 網格下限：{} 網格數量：{}\n初始總額：{} TWD,  初始價格：{}\n當前總額：{} TWD,  當前買方價格：{}\n已實現利潤：{} {}\n當前報酬率：{}% \n\n'.format(
             self.gd.init_info['upper'],
             self.gd.init_info['lower'],
             self.gd.init_info['grid_num'],
@@ -81,18 +83,20 @@ class GridPage(object): # 狀態總覽
         self.printInfo()
          
     def checkOrder(self):
-        initBalance = self.gd.get_base_info()
-        self.balance['text'] = 'TWD: {} \n USDT: {}'.format(str(initBalance['TWD']['balance']),str(initBalance['USDT']['balance']))
-        self.msg = '\n網格進行中..\n\n'
-        self.now_profit()
-        self.gd.checking_orders()
-        self.page.after(90000,self.checkOrder)
+        try:
+            initBalance = self.gd.get_base_info()
+            self.balance['text'] = 'TWD: {} \n USDT: {}'.format(str(initBalance['TWD']['balance']),str(initBalance['USDT']['balance']))
+            self.msg = '\n網格進行中..\n\n'
+            self.now_profit()
+            self.gd.checking_orders()
+            self.page.after(90000,self.checkOrder)
+        except Exception as e:
+            print('check: '+str(e))
+
 
     def printInfo(self):
-        self.st['state'] = 'normal'	
         self.st.delete('0.0','end')
         self.st.insert('end',str(self.msg)+'\n')
         self.st.update()
         self.msg = ''
-        self.st['state'] = 'disabled'	
 

@@ -66,8 +66,8 @@ class Grid:
     def count_grade_profit(self,upper,lower,grid_num):
         self.grade = round((upper - lower) / (grid_num-1),3)
         profit_range = {
-            'min': round(((self.grade/upper) - 0.0012)*100,2),
-            'max': round(((self.grade/lower) - 0.0012)*100,2)}
+            'min': round(((self.grade/upper) - 0.003)*100,2),
+            'max': round(((self.grade/lower) - 0.003)*100,2)}
         self.init_info['price'] = float(self.get_market_price()['sell'])
         twdNeed = round(((self.init_info['price']-lower)/self.grade)*9*self.init_info['price'])
         usdtNeed = float(round((upper-self.init_info['price'])/self.grade)*9)
@@ -79,7 +79,7 @@ class Grid:
             usdtAva = float(self.get_base_info()['USDT']['balance'])
             usdtNeed = usdtNeed-usdtAva if (usdtNeed-usdtAva)>=0 else 0
         self.least = twdNeed+(usdtNeed*upper)
-        self.least = round(self.least*(1+(0.0015*grid_num)))
+        self.least = round(self.least*(1+(0.002*grid_num)))
         print(usdtNeed)
         print(twdNeed)
         return {'grade':self.grade,'profit':profit_range,'least':self.least,'usdtleast':usdtNeed,'twdleast':twdNeed}
@@ -136,9 +136,9 @@ class Grid:
                     continue
                 amount = item['amount']
                 if self.earn_type == 'TWD' and item['side']=='buy':
-                    amount=math.ceil(amount*(100.1))/100
+                    amount=math.ceil(amount*(100.15))/100
                 elif self.earn_type == 'USDT' and item['side']=='sell':
-                    amount=math.ceil(amount*(100.1))/100
+                    amount=math.ceil(amount*(100.15))/100
 
                 self.all_price_list[i]['orderId'] = self.client.set_private_create_order(
                     pair=self.pair,
@@ -159,12 +159,12 @@ class Grid:
 
     def checking_orders(self):
         for i,item in self.all_price_list.items():
-            if item['orderId'] != -1:
+            if item['orderId'] == -1:
                 continue
             pre = i-1 if i>0 else i
             nex = i+1 if i<len(self.all_price_list)-1 else i
             
-            order_info = self.client.get_private_order_detail(item['orderId'])
+            order_info = self.client.get_private_order_detail(int(item['orderId']))
             if order_info['state']=='done':
                 if order_info['side']=='buy':
                     self.max_pending_orders[nex]['side']='sell'
@@ -181,9 +181,9 @@ class Grid:
 
                 amount = self.max_pending_orders[nex]['amount']
                 if self.earn_type == 'TWD' and self.max_pending_orders[nex]['side']=='buy':
-                    amount=math.ceil(amount*(100.1))/100
+                    amount=math.ceil(amount*(100.15))/100
                 elif self.earn_type == 'USDT' and self.max_pending_orders[nex]['side']=='sell':
-                    amount=math.ceil(amount*(100.1))/100
+                    amount=math.ceil(amount*(100.15))/100
 
                 self.max_pending_orders[nex]['orderId'] = self.client.set_private_create_order(
                     pair=self.pair,
@@ -191,7 +191,6 @@ class Grid:
                     amount=str(amount),
                     price=self.max_pending_orders[nex]['price']
                 )['id']
-        self._record()
         self.all_price_list=self.max_pending_orders
         newPrice = self.get_market_price()
         self.new_info['price']=newPrice['buy']
@@ -199,6 +198,8 @@ class Grid:
             self.floating_profit = round((self.realized_profit / self.init_info['balance'])*100,2)
         else:
             self.floating_profit = round((self.realized_profit / self.init_info['amount'])*100,2)
+        self._record()
+        
 
 
     def _record(self):
