@@ -23,6 +23,7 @@ class Grid:
         self.max_pending_orders = {}
         self.grid_path = 'grid_parameter.txt'
         self.grid_exists()
+        
     def delete_grid(self):
         if os.path.exists(self.grid_path):
             os.remove(self.grid_path)
@@ -79,7 +80,7 @@ class Grid:
             usdtAva = float(self.get_base_info()['USDT']['balance'])
             usdtNeed = usdtNeed-usdtAva if (usdtNeed-usdtAva)>=0 else 0
         self.least = twdNeed+(usdtNeed*upper)
-        self.least = round(self.least*(1+(0.002*grid_num)))
+        self.least = round(self.least*(1.03))
         print(usdtNeed)
         print(twdNeed)
         return {'grade':self.grade,'profit':profit_range,'least':self.least,'usdtleast':usdtNeed,'twdleast':twdNeed}
@@ -106,7 +107,7 @@ class Grid:
                                       'orderId':-1}
             
             placeNum = grid_per_amount/self.init_info['price'] if self.earn_type == 'TWD' else grid_per_amount/price
-            self.all_price_list[i]['amount'] = round(placeNum,2)
+            self.all_price_list[i]['amount'] = math.floor(placeNum*100)/100
 
             if price <= self.init_info['price'] and (self.init_info['price'] - price) > self.grade/2:
                 self.all_price_list[i]['side'] = 'buy'
@@ -135,10 +136,10 @@ class Grid:
                 if item['side'] == 'N':
                     continue
                 amount = item['amount']
-                if self.earn_type == 'TWD' and item['side']=='buy':
-                    amount=math.ceil(amount*(100.15))/100
-                elif self.earn_type == 'USDT' and item['side']=='sell':
-                    amount=math.ceil(amount*(100.15))/100
+                # if self.earn_type == 'TWD' and item['side']=='buy':
+                #     amount=math.ceil(amount*(100.15))/100
+                # elif self.earn_type == 'USDT' and item['side']=='sell':
+                #     amount=math.ceil(amount*(100.15))/100
 
                 self.all_price_list[i]['orderId'] = self.client.set_private_create_order(
                     pair=self.pair,
@@ -168,22 +169,22 @@ class Grid:
             if order_info['state']=='done':
                 if order_info['side']=='buy':
                     self.max_pending_orders[nex]['side']='sell'
-                    self.new_info['amount'] += item['amount']
+                    self.new_info['amount'] += item['amount']-(item['amount']*self.taker_fee)
                     self.new_info['balance'] -= item['amount']*item['price']
                 elif order_info['side']=='sell':
                     self.max_pending_orders[pre]['side']='buy'
                     self.new_info['amount'] -= item['amount']
-                    self.new_info['balance'] += item['amount']*item['price']
+                    self.new_info['balance'] += item['amount']*item['price']-((item['amount']*item['price'])*self.taker_fee)
                     if self.earn_type=='TWD':
-                        self.realized_profit += self.grade*item['amount']  
+                        self.realized_profit += (self.grade*item['amount'])*(1-self.taker_fee)
                     else: 
-                        self.realized_profit += self.max_pending_orders[i]['amount'] - self.max_pending_orders[pre]['amount']
+                        self.realized_profit += (self.max_pending_orders[i]['amount'] - self.max_pending_orders[pre]['amount'])-(self.max_pending_orders[i]['amount']*self.taker_fee)
 
                 amount = self.max_pending_orders[nex]['amount']
-                if self.earn_type == 'TWD' and self.max_pending_orders[nex]['side']=='buy':
-                    amount=math.ceil(amount*(100.15))/100
-                elif self.earn_type == 'USDT' and self.max_pending_orders[nex]['side']=='sell':
-                    amount=math.ceil(amount*(100.15))/100
+                # if self.earn_type == 'TWD' and self.max_pending_orders[nex]['side']=='buy':
+                #     amount=math.ceil(amount*(100.15))/100
+                # elif self.earn_type == 'USDT' and self.max_pending_orders[nex]['side']=='sell':
+                #     amount=math.ceil(amount*(100.15))/100
 
                 self.max_pending_orders[nex]['orderId'] = self.client.set_private_create_order(
                     pair=self.pair,
